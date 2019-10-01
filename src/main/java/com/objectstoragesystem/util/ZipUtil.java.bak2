@@ -1,0 +1,201 @@
+package com.objectstoragesystem.util;
+
+
+
+import java.util.logging.Logger;
+
+import java.io.BufferedInputStream;
+import java.io.BufferedWriter;
+import java.io.File;
+import java.io.FileInputStream;
+import java.io.FileNotFoundException;
+import java.io.FileOutputStream;
+import java.io.InputStream;
+import java.io.IOException;
+import java.io.OutputStream;
+import java.io.OutputStreamWriter;
+import java.io.Writer;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.zip.ZipEntry;
+import java.util.zip.ZipOutputStream;
+
+
+public class ZipUtil {
+    private static final Logger logger = Logger.getLogger(ZipUtil.class.getName());
+
+    private static final String README_TXT_FILE_NAME = "readme.txt";
+    private static final String METADATA_TXT_FILE_NAME = "metadata.txt";
+    private static final String ZIP_FILE_EXTENSION = ".zip";
+
+    public static final int BUFFER = 1024;
+
+    //Source folder which has to be zipped
+    public static String sourceFolderToBeZipped = null;
+
+    public static String zipFileCanonicalPath = null;
+
+    public static List<File> fileList = new ArrayList<File>();
+
+    public static void zip(String sourceDir, String uploadFolder) throws Exception {
+        logger.info("\n void zip(String sourceDir, String uploadFolder)");
+
+        fileList.clear();
+
+        if (sourceDir!= null && sourceDir.length() > 0) {
+            logger.info("\n sourceDir: " + sourceDir);
+
+            sourceFolderToBeZipped = sourceDir;
+            logger.info("\n sourceFolderToBeZipped: " + sourceFolderToBeZipped);
+
+            //get list of files
+            List<File> fileList = getFileList(new File(sourceDir));
+
+            //displayFileList(fileList);
+
+            //go through the list of files and zip them
+            zipFiles(fileList, uploadFolder);
+        }
+    }
+
+    private static void zipFiles(List<File> fileList, String uploadFolder) throws FileNotFoundException {
+        //displayFileList(fileList);
+
+        if (fileList != null) {
+            logger.info("\n fileList.size(): " + fileList.size());
+
+            zipFileCanonicalPath = sourceFolderToBeZipped.concat(ZIP_FILE_EXTENSION);
+            logger.info("\n zipFileCanonicalPath: " + zipFileCanonicalPath);
+
+            try {
+                //Creating ZipOutputStream - Using input name to create output name
+
+                FileOutputStream fos = new FileOutputStream(zipFileCanonicalPath);
+
+                ZipOutputStream zos = new ZipOutputStream(fos);
+
+                //looping through all the files
+                for (File file : fileList) {
+                    // To handle empty directory
+                    if (file.isDirectory()) {
+                        // ZipEntry --- Here file name can be created using the source file
+                        //ZipEntry ze = new ZipEntry(getFileName(file.toString()) + "/");
+                        ZipEntry ze = new ZipEntry(getFileName(file.toString()) + Constants.FORWARD_SLASH_SEPARATOR);
+                        // Putting zipentry in zipoutputstream
+                        zos.putNextEntry(ze);
+                        zos.closeEntry();
+                    } else {
+                        FileInputStream fis = new FileInputStream(file);
+                        BufferedInputStream bis = new BufferedInputStream(fis, BUFFER);
+                        // ZipEntry --- Here file name can be created using the source file
+                        ZipEntry ze = new ZipEntry(getFileName(file.toString()));
+                        // Putting zipentry in zipoutputstream
+                        zos.putNextEntry(ze);
+                        byte data[] = new byte[BUFFER];
+                        int count;
+                        while ((count = bis.read(data, 0, BUFFER)) != -1) {
+                            zos.write(data, 0, count);
+                        }
+                        bis.close();
+                        zos.closeEntry();
+                    }
+                }
+                zos.close();
+
+                logger.info("\n zipFileCanonicalPath: " + zipFileCanonicalPath);
+            } catch(IOException ioExp) {
+                logger.severe("Error while zipping " + ioExp.getMessage());
+            }
+        }
+    }
+
+    /**
+     * This method will give the list of the files
+     * in folder and subfolders
+     * @param source
+     * @return
+     */
+    private static List<File> getFileList(File source) {
+        if (source.isFile()) {
+            fileList.add(source);
+        } else if (source.isDirectory()) {
+            String[] subList = source.list();
+            // This condition checks for empty directory
+            if (subList.length == 0) {
+                logger.info("\n path -- " + source.getAbsolutePath());
+                fileList.add(new File(source.getAbsolutePath()));
+            }
+
+            for (String child : subList) {
+                getFileList(new File(source, child));
+            }
+        }
+        return fileList;
+    }
+
+    /**
+     * @param filePath
+     * @return
+     */
+    private static String getFileName(String filePath) {
+        logger.info("\n filePath: " + filePath);
+        String name = filePath.substring(sourceFolderToBeZipped.length() + 1, filePath.length());
+        logger.info("\n name: " + name);
+        return name;
+    }
+
+    /*
+    private static void displayFileList(List<File> fileList) {
+        logger.info("\n void displayFileList(List<File> fileList)");
+
+        if (fileList != null) {
+            logger.info("\n fileList.size(): " + fileList.size());
+
+            for (int i=0; i<fileList.size(); i++) {
+                logger.info(" fileList.get(" + i + "): " + fileList.get(i));
+            }
+        }
+    }
+    */
+
+    public static void createREADMEFile(String currentDirectory) throws IOException {
+        logger.info("\n void createREADMEFile(String currentDirectory)");
+
+        if (currentDirectory != null && currentDirectory.length() > 0) {
+            Writer writer = null;
+
+            try {
+                writer = new BufferedWriter(new OutputStreamWriter(new FileOutputStream(currentDirectory + File.separator + README_TXT_FILE_NAME), "utf-8"));
+                writer.write(currentDirectory + " " + README_TXT_FILE_NAME);
+            } catch(IOException ex) {
+                logger.severe(ex.getMessage());
+                // Report
+            } finally {
+                try {
+                    writer.close();
+                } catch(Exception ex) {
+                    logger.severe(ex.getMessage());
+                    // ignore
+                }
+            }
+        }
+    }
+
+    public static void copyFileUsingStream(File source, File dest) throws IOException {
+        InputStream is = null;
+        OutputStream os = null;
+        try {
+            is = new FileInputStream(source);
+            os = new FileOutputStream(dest);
+            //byte[] buffer = new byte[1024];
+            byte[] buffer = new byte[BUFFER];
+            int length;
+            while ((length = is.read(buffer)) > 0) {
+                os.write(buffer, 0, length);
+            }
+        } finally {
+            is.close();
+            os.close();
+        }
+    }
+}

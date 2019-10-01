@@ -1,0 +1,45 @@
+package com.objectstoragesystem.service;
+
+
+
+import java.util.ArrayList;
+import java.util.List;
+
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.stereotype.Service;
+
+import com.objectstoragesystem.entity.FileDownload;
+import com.objectstoragesystem.repository.FileDownloadRepository;
+
+
+@Service
+public class FileDownloadService {
+    @Autowired
+    private FileDownloadRepository fileUploadRepository;
+
+    public List<FileDownload> findAll() {
+        List<FileDownload> fileUploadList = new ArrayList<FileDownload>();
+        Iterable<FileDownload> iterable = fileUploadRepository.findAll();
+        if (iterable != null) {
+            iterable.forEach(fileUploadList::add);
+        }
+        return fileUploadList;
+    }
+	
+    public FileDownload findById(Long id) {
+        return fileUploadRepository.findOne(id);
+    }
+
+    public FileDownload save(FileDownload fileUpload) {
+        return fileUploadRepository.save(fileUpload);
+    }
+
+    public void delete(FileDownload fileUpload) {
+        fileUploadRepository.delete(fileUpload);
+        return; 
+    }
+
+    public List<FileDownload> findByFeed(String feed) {
+        return fileUploadRepository.findByFeed(feed);
+    }
+}
