@@ -1,0 +1,178 @@
+package com.objectstoragesystem.util;
+
+
+
+import java.util.ArrayList;
+import java.util.List;
+import java.util.logging.Logger;
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
+
+import java.io.File;
+import java.io.FileOutputStream;
+import com.objectstoragesystem.service.S3FileUploadService;
+
+import java.io.IOException;
+import java.io.OutputStreamWriter;
+import java.io.Writer;
+import java.io.BufferedWriter;
+import java.text.SimpleDateFormat;
+
+
+public class ZipRunnable implements Runnable {
+    private static final Logger logger = Logger.getLogger(ZipRunnable.class.getName());
+    private static final DateTimeFormatter dateTimeFormatter = DateTimeFormatter.ofPattern("YYYY-MM-dd-HH-mm-ss");
+
+    private static final String METADATA_TXT_FILE_NAME = "metadata.txt";
+    private static final String ZIP_FILE_EXTENSION = ".zip";
+
+    private static String ingressFolder = null;
+    private static String zipFolder = null;
+    private static long fileAgeInSeconds = 3600;
+    private static String uploadFolder = null;
+    private static S3FileUploadService s3FileUploadService = null;
+
+    private static List<File> fileList = new ArrayList<File>();
+
+    public ZipRunnable() {
+    }
+
+    public ZipRunnable(String ingressFolder, String zipFolder, long fileAgeInSeconds, String uploadFolder, S3FileUploadService s3FileUploadService) {
+        this.ingressFolder = ingressFolder;
+        this.zipFolder = zipFolder;
+        this.fileAgeInSeconds = fileAgeInSeconds;
+        this.uploadFolder = uploadFolder;
+        this.s3FileUploadService = s3FileUploadService;
+    }
+
+    public void run() {
+        String currentTime = dateTimeFormatter.format(LocalDateTime.now());
+        logger.info("\n\n\n currentTime: " + currentTime);
+
+        if (ingressFolder != null &&
+            ingressFolder.length() > 0 &&
+            zipFolder != null &&
+            zipFolder.length() > 0) {
+            logger.info("\n ingressFolder: " + ingressFolder +
+                        "\t zipFolder: " + zipFolder +
+                        "\t fileAgeInSeconds: " + fileAgeInSeconds);
+
+            String destinationFolderPath = zipFolder + File.separator +  currentTime;
+            logger.info("\n destinationFolderPath: " + destinationFolderPath);
+
+            File destinationFolder = new File(destinationFolderPath);
+
+            //Verify if destinationFolder is already present; If not then create it
+            if (!destinationFolder.exists()) {
+                destinationFolder.mkdir();
+                logger.info("\n Directory created: " + destinationFolder);
+
+                //The logic to zip a folder requires at least one file in the zip folder.  Hence creating a readme file
+                try {
+                    ZipUtil.createREADMEFile(destinationFolderPath);
+                } catch(Exception e) {
+                    logger.severe(e.getMessage());
+                }
+            }
+
+            Util.moveDirectoryContents(ingressFolder, destinationFolderPath, fileAgeInSeconds);
+
+
+            fileList.clear();
+
+            //get list of files
+            List<File> fileList = getFileList(destinationFolder);
+
+            try {
+                createZipMetadataFile(destinationFolderPath, destinationFolderPath + File.separator + METADATA_TXT_FILE_NAME);
+
+                ZipUtil.copyFileUsingStream(new File(destinationFolderPath + File.separator + METADATA_TXT_FILE_NAME), new File(zipFolder + File.separator + METADATA_TXT_FILE_NAME));
+
+                String zipFileCanonicalPath = destinationFolderPath + ".zip";
+
+                ZipUtil.zip(destinationFolderPath, uploadFolder, s3FileUploadService);
+
+
+                //Upload zip file of the hourly folder
+                Util.upload(zipFileCanonicalPath, uploadFolder, s3FileUploadService);
+
+                //Upload metadata.txt file of the hourly folder
+                Util.upload(zipFolder + File.separator + METADATA_TXT_FILE_NAME, uploadFolder, s3FileUploadService);
+
+
+                //After S3 upload is done, clean up the directory used for zipping
+                Util.deleteDirectory(destinationFolder);
+                logger.info("\n Completed cleanup of the directory used for zipping");
+            } catch(Exception e) {
+                logger.severe(e.getMessage());
+            }
+        }
+    }
+
+    /**
+     * This method will give the list of the files
+     * in folder and subfolders
+     * @param source
+     * @return
+     */
+    private static List<File> getFileList(File source) {
+        if (source.isFile()) {
+            fileList.add(source);
+        } else if (source.isDirectory()) {
+            String[] subList = source.list();
+            // This condition checks for empty directory
+            if (subList.length == 0) {
+                logger.info("\n path -- " + source.getAbsolutePath());
+                fileList.add(new File(source.getAbsolutePath()));
+            }
+
+            for (String child : subList) {
+                getFileList(new File(source, child));
+            }
+        }
+        return fileList;
+    }
+
+    public static void createZipMetadataFile(String sourceFolderToBeZipped, String metadataFileCanonicalPath) throws IOException {
+        logger.info("\n void createZipMetadataFile()");
+
+        Writer writer = null;
+
+        try {
+            writer = new BufferedWriter(new OutputStreamWriter(new FileOutputStream(metadataFileCanonicalPath), "utf-8"));
+
+            if (fileList != null) {
+                writer.write("\n Total number of files: " + fileList.size());
+
+                for (int i=0; i<fileList.size(); i++) {
+                    File file = fileList.get(i);
+
+                    SimpleDateFormat sdf = new SimpleDateFormat("yyyy/MM/dd/ HH:mm:ss");
+
+                    writer.write("\n\n (" + i + ")" +
+                            "\n file: " + fileList.get(i) +
+                            "\n file.getCanonicalPath(): " + file.getCanonicalPath() +
+                            "\n file.getPath(): " + file.getPath() +
+                            "\n file.getName(): " + file.getName() +
+                            "\n file.getAbsolutePath(): " + file.getAbsolutePath() +
+                            "\n file.isFile(): " + file.isFile() +
+                            "\n file.isDirectory(): " + file.isDirectory() +
+                            "\n file.length(): " + file.length() +
+                            "\n file.lastModified()): " + sdf.format(file.lastModified()));
+                }
+            }
+
+            fileList.add(new File(sourceFolderToBeZipped + File.separator + METADATA_TXT_FILE_NAME));
+        } catch(IOException ex) {
+            logger.severe(ex.getMessage());
+            // Report
+        } finally {
+            try {
+                writer.close();
+            } catch(Exception ex) {
+                logger.severe(ex.getMessage());
+                // ignore
+            }
+        }
+    }
+}

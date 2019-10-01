@@ -1,0 +1,48 @@
+package com.objectstoragesystem.service;
+
+
+
+import java.util.ArrayList;
+import java.util.List;
+
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.stereotype.Service;
+
+import com.objectstoragesystem.entity.FileUpload;
+import com.objectstoragesystem.repository.FileUploadRepository;
+
+
+@Service
+public class FileUploadService {
+    @Autowired
+    private FileUploadRepository fileUploadRepository;
+
+    public List<FileUpload> findAll() {
+        List<FileUpload> fileUploadList = new ArrayList<FileUpload>();
+        Iterable<FileUpload> iterable = fileUploadRepository.findAll();
+        if (iterable != null) {
+            iterable.forEach(fileUploadList::add);
+        }
+        return fileUploadList;
+    }
+	
+    public FileUpload findById(Long id) {
+        return fileUploadRepository.findOne(id);
+    }
+
+    public FileUpload save(FileUpload fileUpload) {
+        return fileUploadRepository.save(fileUpload);
+    }
+
+    public void delete(FileUpload fileUpload) {
+        fileUploadRepository.delete(fileUpload);
+        return; 
+    }
+
+    public Page<FileUpload> findByFileName(String fileName, Pageable pageable) {
+        return fileUploadRepository.findByFileName(fileName, pageable);
+    }
+}

@@ -1,0 +1,73 @@
+package com.objectstoragesystem.util;
+
+
+
+import java.io.File;
+import java.io.FileInputStream;
+import java.io.InputStream;
+import java.io.IOException;
+import java.time.LocalDateTime;
+import java.time.temporal.ChronoField;
+import java.util.logging.Level;
+import java.util.logging.Logger;
+import java.util.Properties;
+
+
+public class Constants {
+    public static final String V1_CONFIG_SERVICE_RESOURCE_URI = "/v1/configservice";
+    public static final String V1_KEYSTORE_SERVICE_RESOURCE_URI = "/v1/keystoreservice";
+
+    //public static final String V1_RAW_DATA_FILE_LIST_SERVICE_RESOURCE_URI = "/v1/rawdatafilelistservice";
+    public static final String V1_OBJECT_LIST_SERVICE_RESOURCE_URI = "/v1/objectlistservice";
+
+    //public static final String V1_RAW_DATA_FILE_UPLOAD_SERVICE_RESOURCE_URI = "/v1/rawdatafileuploadservice";
+    public static final String V1_OBJECT_UPLOAD_SERVICE_RESOURCE_URI = "/v1/objectuploadservice";
+
+    //public static final String V1_RAW_DATA_FILE_DOWNLOAD_SERVICE_RESOURCE_URI = "/v1/rawdatafiledownloadservice";
+    public static final String V1_OBJECT_DOWNLOAD_SERVICE_RESOURCE_URI = "/v1/objectdownloadservice";
+
+    public static final String FORWARD_SLASH_SEPARATOR = "/";
+    public static final String EQUALS_SEPARATOR = "=";
+
+    public static final String SECRET_KEY_PREFIX = "qventus:";
+
+    public static final String YEAR = "Year";
+    public static final String MONTH = "Month";
+    public static final String DAY = "Day";
+    public static final String HOUR = "Hour";
+    public static final String MINUTE = "Minute";
+
+    public static final String ALIAS = "alias";
+
+    public static final String CONFIGPARAMETERNAME_STACK = "stack";
+    public static final String CONFIGPARAMETERNAME_INGRESS_FOLDER = "ingress_folder";
+    public static final String CONFIGPARAMETERNAME_ZIP_FOLDER = "zip_folder";
+    public static final String CONFIGPARAMETERNAME_COMPRESS_DECOMPRESS_DIRECTORY = "compress_decompress_folder";
+    public static final String CONFIGPARAMETERNAME_DOWNLOAD_FOLDER = "download_folder";
+    public static final String CONFIGPARAMETERNAME_UPLOAD_FOLDER = "upload_folder";
+    public static final String CONFIGPARAMETERNAME_AWS_REGION = "aws_region";
+    public static final String CONFIGPARAMETERNAME_AWS_ACCESS_KEY_ID = "aws_access_key_id";
+    public static final String CONFIGPARAMETERNAME_AWS_SECRET_ACCESS_KEY = "aws_secret_access_key";
+    public static final String CONFIGPARAMETERNAME_AWS_S3_BUCKET = "aws_s3_bucket";
+    public static final String CONFIGPARAMETERNAME_AWS_S3_BUCKET_FOLDER = "aws_s3_bucket_folder";
+    public static final String CONFIGPARAMETERNAME_AWS_IAM_KMS_CMK = "aws_iam_kms_cmk";
+    public static final String CONFIGPARAMETERNAME_POLLING_INTERVAL_IN_SECONDS = "polling_interval_in_seconds";
+    public static final String CONFIGPARAMETERNAME_INITIAL_POLLING_DELAY_IN_SECONDS = "initial_polling_delay_in_seconds";
+    public static final String CONFIGPARAMETERNAME_FILE_AGE_IN_SECONDS = "file_age_in_seconds";
+
+    public static final String OBJECT_STORAGE_KEY_STORE_STATUS_ENABLED = "ENABLED";
+
+    public static final String FILETRANSFER_TRANSFER_NOT_STARTED = "TRANSFER_NOT_STARTED";
+    public static final String FILETRANSFER_TRANSFER_IN_PROGRESS = "TRANSFER_IN_PROGRESS";
+    public static final String FILETRANSFER_TRANSFER_COMPLETED = "TRANSFER_COMPLETED";
+    public static final String FILETRANSFER_TRANSFER_FAILED = "TRANSFER_FAILED";
+
+    public static final String RAWDATAFILE_SOURCE_HISTORICAL = "HISTORICAL";
+    public static final String RAWDATAFILE_SOURCE_HL7 = "HL7";
+
+    public static final String RAWDATAFILE_QVCREATEDSRC_SYSTEM = "SYSTEM";
+    public static final String RAWDATAFILE_QVUPDATEDSRC_SYSTEM = "SYSTEM";
+
+    public static final String KEY_GENERATOR_ALGORITHM_AES = "AES";
+    public static final int KEY_BIT_SIZE_256 = 256;
+}

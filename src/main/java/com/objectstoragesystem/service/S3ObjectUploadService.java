@@ -1,0 +1,240 @@
+package com.objectstoragesystem.service;
+
+
+
+import java.util.logging.Logger;
+import org.springframework.scheduling.annotation.Async;
+import org.springframework.stereotype.Service;
+
+import java.util.concurrent.CompletableFuture;
+
+import com.amazonaws.AmazonClientException;
+import com.amazonaws.AmazonServiceException;
+
+import com.amazonaws.event.ProgressEvent;
+import com.amazonaws.event.ProgressEventType;
+import com.amazonaws.event.ProgressListener;
+
+import com.amazonaws.services.s3.AmazonS3Encryption;
+import com.amazonaws.services.s3.model.PutObjectRequest;
+
+import com.amazonaws.services.s3.transfer.Upload;
+import com.amazonaws.services.s3.transfer.TransferManager;
+import com.amazonaws.services.s3.transfer.TransferManagerBuilder;
+
+import java.io.File;
+import java.io.IOException;
+import java.sql.Timestamp;
+
+import com.objectstoragesystem.util.Constants;
+import com.objectstoragesystem.util.Util;
+
+import org.springframework.beans.factory.annotation.Autowired;
+import com.objectstoragesystem.entity.ObjectUpload;
+
+
+@Service
+public class S3ObjectUploadService {
+    private static final Logger logger = Logger.getLogger(S3ObjectUploadService.class.getName());
+
+    @Autowired
+    private ObjectUploadService objectUploadService;
+
+    public S3ObjectUploadService() {
+    }
+
+    @Async
+    public CompletableFuture<Boolean> upload(String canonicalFilePathName, String dataSourceType, String feed, Long waitTimeInMilliSeconds) {
+        logger.info("\n CompletableFuture<Boolean> upload(String canonicalFilePathName, String dataSourceType, String feed, Long waitTimeInMilliSeconds)");
+        Boolean status = Boolean.FALSE;
+
+        if (canonicalFilePathName == null || canonicalFilePathName.length() == 0) {
+            throw new IllegalArgumentException("Invalid file path name supplied.  Please supply valid file path name to upload.");
+        }
+
+        if (objectUploadService == null) {
+            throw new IllegalArgumentException("Invalid objectUploadService.  Please restart Spring Boot application.");
+        }
+
+        try {
+            Thread.sleep(waitTimeInMilliSeconds);
+
+            File originalFile = new File(canonicalFilePathName);
+
+            long fileSizeInBytes = originalFile.length();
+            logger.info(" fileSizeInBytes: " + fileSizeInBytes);
+
+
+            File compressedFile = compress(originalFile);
+            if (compressedFile == null) {
+                throw new IllegalArgumentException("File compression failed.");
+            }
+
+            long compressedFileSizeInBytes = compressedFile.length();
+            logger.info("\n compressedFileSizeInBytes: " + compressedFileSizeInBytes);
+
+
+            String baseS3Key = Util.getBaseS3Key();
+            logger.info("\n baseS3Key: " + baseS3Key);
+
+
+            String statusStr = "";
+            String operationStatus = null;
+            int iterationCount = 0;
+
+            String fileS3Key = baseS3Key + compressedFile.getName();
+            logger.info("\n fileS3Key: " + fileS3Key);
+
+
+            for (int i=0; i<Util.fileTransferRetryCount; i++) {
+
+                ++iterationCount;
+                logger.info("\n Iteration #: " + iterationCount);
+
+                Timestamp startTime = new Timestamp(System.currentTimeMillis());
+                logger.info("\n startTime: " + startTime);
+
+                operationStatus = uploadMultipartFile(compressedFile, fileS3Key);
+                logger.info("\n operationStatus: " + operationStatus);
+
+                Timestamp endTime = new Timestamp(System.currentTimeMillis());
+                logger.info("\n endTime: " + endTime);
+
+                long durationInMilliSeconds = endTime.getTime() - startTime.getTime();
+                logger.info(" durationInMilliSeconds: " + durationInMilliSeconds);
+
+
+                if (operationStatus == null) {
+                    statusStr = Constants.FILETRANSFER_TRANSFER_COMPLETED;
+                } else {
+                    statusStr = Constants.FILETRANSFER_TRANSFER_FAILED;
+                }
+
+                ObjectUpload objectUpload = Util.createObjectUpload(compressedFile.getCanonicalPath(),
+                        baseS3Key + compressedFile.getName(),
+                        new Long(fileSizeInBytes),
+                        new Long(compressedFileSizeInBytes),
+                        startTime,
+                        endTime,
+                        durationInMilliSeconds,
+                        new Long(iterationCount),
+                        statusStr,
+                        operationStatus,
+                        Util.stack,
+                        feed,
+                        dataSourceType,
+                        Constants.OBJECT_QVCREATEDSRC_SYSTEM,
+                        Constants.OBJECT_QVUPDATEDSRC_SYSTEM
+                );
+                logger.info("\n Persisting objectUpload: " + objectUpload);
+                objectUploadService.save(objectUpload);
+                logger.info("\n Persisted objectUpload: " + objectUpload);
+
+                if (operationStatus == null) {
+                    status = Boolean.TRUE;
+
+                    logger.info("\n S3 file upload successful for file: " + compressedFile.getCanonicalPath() + " with fileS3Key: " + fileS3Key);
+                    if (compressedFile.delete()) {
+                        logger.info("\n File delete successful for file: " + compressedFile.getCanonicalPath());
+                    } else {
+                        logger.info("\n File delete unsuccessful for file: " + compressedFile.getCanonicalPath());
+                    }
+
+                    if (originalFile.delete()) {
+                        logger.info("\n File delete successful for file: " + originalFile.getCanonicalPath());
+                    } else {
+                        logger.info("\n File delete unsuccessful for file: " + originalFile.getCanonicalPath());
+                    }
+
+                    break;
+                }
+
+                Thread.sleep(waitTimeInMilliSeconds);
+            }
+
+            if (iterationCount ==  Util.fileTransferRetryCount) {
+                logger.info("\n S3 file upload unsuccessful for file: " + compressedFile.getCanonicalPath() + " with fileS3Key: " + fileS3Key);
+            }
+        } catch(Exception e) {
+            e.printStackTrace();
+            logger.severe(e.getMessage());
+
+            status = Boolean.FALSE;
+        }
+
+
+        return CompletableFuture.completedFuture(status);
+    }
+
+    public File compress(File file) throws IOException {
+        File compressedFile = null;
+        if (file != null) {
+            String compressedAndEncrptedCanonicalFilePath = Util.compressDecompressFolder + File.separator + file.getName() + ".gz";
+            logger.info("\n compressedAndEncrptedCanonicalFilePath: " + compressedAndEncrptedCanonicalFilePath);
+
+            Util.compressToGzipFile(file.getCanonicalPath(), compressedAndEncrptedCanonicalFilePath);
+            logger.info("\n HERE 1000");
+
+            compressedFile = new File(compressedAndEncrptedCanonicalFilePath);
+        }
+        return compressedFile;
+    }
+
+    public String uploadMultipartFile(File file, String s3Key) {
+        logger.info("\n\n ==>> void uploadMultipartFile(File file, String s3Key)");
+        logger.info(" file: " + file);
+        logger.info(" s3Key: " + s3Key);
+
+        String operationStatus = null;
+
+        final PutObjectRequest request = new PutObjectRequest(Util.awsS3Bucket, s3Key, file);
+        logger.info("\n uploadFile::request: " + request);
+
+        request.setGeneralProgressListener(new ProgressListener() {
+            @Override
+            public void progressChanged(ProgressEvent progressEvent) {
+                ProgressEventType progressEventType = progressEvent.getEventType();
+                logger.info("\n progressEventType: " + progressEventType);
+                logger.info(" progressEventType.isTransferEvent(): " + progressEventType.isTransferEvent());
+                logger.info(" progressEventType.isRequestCycleEvent(): " + progressEventType.isRequestCycleEvent());
+                logger.info(" progressEventType.isByteCountEvent(): " + progressEventType.isByteCountEvent());
+
+                if (progressEventType.name().equals(ProgressEventType.TRANSFER_STARTED_EVENT.name())) {
+                    logger.info("\n File transfer started");
+                } else if (progressEventType.name().equals(ProgressEventType.TRANSFER_COMPLETED_EVENT.name())) {
+                    logger.info("\n File transfer completed");
+                } else if (progressEventType.name().equals(ProgressEventType.TRANSFER_FAILED_EVENT.name())) {
+                    logger.info("\n File transfer failed");
+                }
+
+                logger.info("\n progressEvent.getBytesTransferred(): " + progressEvent.getBytesTransferred());
+            }
+        });
+
+
+        Upload upload = Util.encryptedTransferManager.upload(request);
+        logger.info("\n upload: " + upload);
+
+        try {
+            upload.waitForCompletion();
+        } catch(AmazonServiceException e) {
+            e.printStackTrace();
+            if (e != null && e.getMessage() != null) {
+                operationStatus = e.getMessage();
+            }
+        } catch(AmazonClientException e) {
+            e.printStackTrace();
+            if (e != null && e.getMessage() != null) {
+                operationStatus = e.getMessage();
+            }
+        } catch(InterruptedException e) {
+            e.printStackTrace();
+            if (e != null && e.getMessage() != null) {
+                operationStatus = e.getMessage();
+            }
+        }
+
+        logger.info("\n operationStatus: " + operationStatus);
+        return operationStatus;
+    }
+}
